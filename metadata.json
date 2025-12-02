@@ -1,0 +1,7 @@
+{
+  "name": "EducaFácil",
+  "description": "Uma plataforma educacional inteligente para escolas de ensino fundamental com gestão de turmas, personalização via IA e automação.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
