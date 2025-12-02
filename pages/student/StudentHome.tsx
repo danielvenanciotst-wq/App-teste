@@ -3,12 +3,12 @@ import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { Subject } from '../../types';
 import { GeminiService } from '../../services/geminiService';
-import { Bot, PlayCircle, FileText, Send, Sparkles, Lightbulb, BrainCircuit, ShieldAlert, Search, X, BookOpen } from 'lucide-react';
+import { Bot, Send, Sparkles, Lightbulb, BrainCircuit, ShieldAlert, BarChart3, Clock } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 export const StudentHome: React.FC = () => {
   const { currentUser } = useAuth();
-  const { getMaterialsByGrade, getAssignmentsByGrade } = useData();
+  const { getAssignmentsByGrade } = useData();
   const [activeSubject, setActiveSubject] = useState<Subject>(Subject.MATH);
   
   // AI Chat State
@@ -19,11 +19,6 @@ export const StudentHome: React.FC = () => {
   // Adaptive Content State
   const [adaptiveTips, setAdaptiveTips] = useState<string>('');
   const [loadingTips, setLoadingTips] = useState(false);
-
-  // Search & Study Models State
-  const [searchTerm, setSearchTerm] = useState('');
-  const [studyModels, setStudyModels] = useState('');
-  const [isGeneratingModels, setIsGeneratingModels] = useState(false);
 
   useEffect(() => {
     if (currentUser?.learningStyle && currentUser.grade) {
@@ -36,35 +31,16 @@ export const StudentHome: React.FC = () => {
 
   if (!currentUser || !currentUser.grade) return null;
 
-  const materials = getMaterialsByGrade(currentUser.grade).filter(m => m.subject === activeSubject);
   const assignments = getAssignmentsByGrade(currentUser.grade).filter(a => a.subject === activeSubject);
-
-  // Filter materials based on search
-  const filteredMaterials = materials.filter(m => 
-    m.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    m.description.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   const handleAskAI = async () => {
     if (!chatInput.trim()) return;
     setIsAiLoading(true);
     setChatResponse('');
     
-    // Pass last material as context if available
-    const context = materials.length > 0 ? `Material recente: ${materials[0].title} - ${materials[0].description}` : '';
-    
-    const response = await GeminiService.getTutorHelp(chatInput, currentUser.grade!, activeSubject, context);
+    const response = await GeminiService.getTutorHelp(chatInput, currentUser.grade!, activeSubject);
     setChatResponse(response);
     setIsAiLoading(false);
-  };
-
-  const handleGenerateStudyModels = async () => {
-    if (!searchTerm.trim()) return;
-    setIsGeneratingModels(true);
-    setStudyModels('');
-    const models = await GeminiService.generateStudyModels(searchTerm, currentUser.grade!, activeSubject);
-    setStudyModels(models);
-    setIsGeneratingModels(false);
   };
 
   const performanceData = [
@@ -78,7 +54,7 @@ export const StudentHome: React.FC = () => {
   const currentScore = performanceData.find(d => d.name.startsWith(activeSubject.substring(0, 3)))?.score || 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in duration-500">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -90,7 +66,6 @@ export const StudentHome: React.FC = () => {
           </div>
         </div>
         <div className="bg-white p-2 rounded-lg shadow-sm border border-gray-100 flex gap-2 w-full md:w-auto">
-           {/* Subject Selector */}
            <select 
              value={activeSubject} 
              onChange={(e) => setActiveSubject(e.target.value as Subject)}
@@ -121,129 +96,66 @@ export const StudentHome: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Content Area */}
         <div className="lg:col-span-2 space-y-6">
-          
-          {/* Recent Materials */}
-          <section className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-              <h2 className="text-lg font-bold flex items-center gap-2">
-                <PlayCircle className="text-indigo-600" /> Materiais de Estudo
-              </h2>
-              {/* Search Bar */}
-              <div className="relative w-full sm:w-64 group">
-                 <input 
-                   type="text" 
-                   placeholder="Pesquisar tópico..." 
-                   value={searchTerm}
-                   onChange={(e) => setSearchTerm(e.target.value)}
-                   className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                 />
-                 <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5 group-focus-within:text-indigo-500" />
-               </div>
-            </div>
-            
-            {/* AI Study Models Feature */}
-            {searchTerm && (
-              <div className="mb-6 bg-gradient-to-r from-indigo-50 to-purple-50 p-4 rounded-lg border border-indigo-100 flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2">
-                <div className="flex items-center gap-3">
-                   <div className="p-2 bg-white rounded-full text-purple-600 shadow-sm">
-                      <Sparkles className="w-5 h-5" />
-                   </div>
-                   <div>
-                      <h3 className="text-sm font-bold text-gray-800">Quer estudar "{searchTerm}"?</h3>
-                      <p className="text-xs text-gray-600">A IA pode criar 3 modelos de estudo exclusivos.</p>
-                   </div>
-                </div>
-                <button 
-                  onClick={handleGenerateStudyModels}
-                  disabled={isGeneratingModels}
-                  className="w-full sm:w-auto bg-purple-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-purple-700 shadow-sm transition-colors flex items-center justify-center gap-2 font-medium"
-                >
-                   {isGeneratingModels ? <Sparkles className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
-                   Gerar 3 Modelos
-                </button>
+           {/* Welcome Banner */}
+           <div className="bg-indigo-600 rounded-xl p-8 text-white relative overflow-hidden">
+              <div className="relative z-10">
+                <h2 className="text-2xl font-bold mb-2">Olá, {currentUser.name}!</h2>
+                <p className="text-indigo-100 max-w-md">Pronto para aprender algo novo hoje? Verifique suas tarefas pendentes ou converse com o Tutor IA.</p>
               </div>
-            )}
+              <div className="absolute right-0 bottom-0 opacity-20 transform translate-x-10 translate-y-10">
+                <BrainCircuit className="w-40 h-40" />
+              </div>
+           </div>
 
-            {/* AI Generated Models Display */}
-            {studyModels && (
-               <div className="mb-6 bg-white border border-purple-100 shadow-md p-5 rounded-xl animate-in fade-in slide-in-from-top-4">
-                  <div className="flex justify-between items-start mb-4 border-b border-gray-100 pb-3">
-                     <div className="flex items-center gap-2 text-purple-700">
-                        <Bot className="w-5 h-5" /> 
-                        <h3 className="font-bold">Planos de Estudo IA: {searchTerm}</h3>
-                     </div>
-                     <button onClick={() => setStudyModels('')} className="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-full transition-colors">
-                        <X className="w-5 h-5" />
-                     </button>
-                  </div>
-                  <div className="prose prose-sm max-w-none text-gray-700 whitespace-pre-line leading-relaxed">
-                     {studyModels}
-                  </div>
-               </div>
-            )}
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Assignments Widget */}
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:border-indigo-300 transition-colors cursor-pointer" onClick={() => window.location.hash = '#/assignments'}>
+                 <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                       <Clock className="text-orange-500 w-5 h-5" /> Tarefas Recentes
+                    </h3>
+                    <span className="text-xs bg-gray-100 px-2 py-1 rounded text-gray-600">Ver todas</span>
+                 </div>
+                 {assignments.length === 0 ? (
+                    <p className="text-sm text-gray-400">Nenhuma tarefa pendente!</p>
+                 ) : (
+                    <ul className="space-y-3">
+                       {assignments.slice(0, 3).map(a => (
+                          <li key={a.id} className="text-sm border-b border-gray-50 last:border-0 pb-2 last:pb-0">
+                             <p className="font-medium text-gray-800 truncate">{a.title}</p>
+                             <p className="text-xs text-gray-500">{a.dueDate}</p>
+                          </li>
+                       ))}
+                    </ul>
+                 )}
+              </div>
 
-            {/* Materials List */}
-            {filteredMaterials.length === 0 ? (
-              <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-200">
-                 <p className="text-gray-500 italic">Nenhum material encontrado {searchTerm ? `para "${searchTerm}"` : 'nesta categoria'}.</p>
-                 {searchTerm && <p className="text-xs text-indigo-500 mt-2">Use o botão acima para pedir ajuda à IA!</p>}
+              {/* Performance Widget */}
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                 <h3 className="font-bold text-gray-800 flex items-center gap-2 mb-4">
+                    <BarChart3 className="text-blue-500 w-5 h-5" /> Desempenho
+                 </h3>
+                 <div className="h-32">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={performanceData}>
+                        <XAxis dataKey="name" fontSize={10} tickLine={false} axisLine={false} />
+                        <Tooltip cursor={{fill: '#f3f4f6'}} contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'}} />
+                        <Bar dataKey="score" fill="#4f46e5" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                 </div>
               </div>
-            ) : (
-              <div className="space-y-3">
-                {filteredMaterials.map(m => (
-                  <div key={m.id} className="p-4 border border-gray-100 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer flex justify-between items-center group">
-                    <div className="flex items-start gap-3">
-                      <div className="p-2 bg-indigo-50 text-indigo-600 rounded mt-1">
-                        <FileText className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-gray-800 group-hover:text-indigo-600 transition-colors">{m.title}</h3>
-                        <p className="text-sm text-gray-500">{m.description}</p>
-                      </div>
-                    </div>
-                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded font-medium">{m.type}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-
-          {/* Assignments */}
-          <section className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-             <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-              <FileText className="text-orange-500" /> Tarefas Pendentes
-            </h2>
-            {assignments.length === 0 ? (
-              <p className="text-gray-400 italic">Você está em dia com as tarefas!</p>
-            ) : (
-              <div className="grid gap-4">
-                {assignments.map(a => (
-                  <div key={a.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-orange-50 rounded-lg border border-orange-100 gap-3">
-                    <div>
-                      <h3 className="font-semibold text-gray-800">{a.title}</h3>
-                      <p className="text-sm text-gray-600">Entrega: {a.dueDate}</p>
-                    </div>
-                    <button className="bg-orange-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-orange-600 w-full sm:w-auto shadow-sm">
-                      Resolver
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
+           </div>
         </div>
 
-        {/* Sidebar: AI Tutor & Stats */}
-        <div className="space-y-6">
-          
-          {/* AI Tutor Card */}
-          <div className="bg-gradient-to-br from-indigo-600 to-purple-700 text-white p-6 rounded-xl shadow-lg flex flex-col h-96">
+        {/* Sidebar: AI Tutor */}
+        <div className="bg-gradient-to-br from-indigo-600 to-purple-700 text-white p-6 rounded-xl shadow-lg flex flex-col h-[500px]">
             <div className="flex items-center gap-2 mb-2 flex-shrink-0">
               <Bot className="w-6 h-6" />
               <h2 className="font-bold text-lg">Tutor IA</h2>
             </div>
             <p className="text-indigo-100 text-xs mb-4 flex-shrink-0">
-              Dúvidas em {activeSubject}? Estou aqui para ajudar!
+              Dúvidas em {activeSubject}?
             </p>
             
             <div className="bg-white/10 rounded-lg p-3 flex-1 overflow-y-auto mb-3 text-sm scrollbar-thin scrollbar-thumb-white/20">
@@ -258,8 +170,8 @@ export const StudentHome: React.FC = () => {
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-indigo-300 text-center">
                     <BrainCircuit className="w-8 h-8 mb-2 opacity-50" />
-                    <p className="italic">"Como resolvo uma equação?"</p>
-                    <p className="italic">"Resuma a Revolução Francesa"</p>
+                    <p className="italic">"Explique Pitágoras"</p>
+                    <p className="italic">"O que é fotossíntese?"</p>
                 </div>
               )}
             </div>
@@ -281,28 +193,6 @@ export const StudentHome: React.FC = () => {
               </button>
             </div>
           </div>
-
-          {/* Performance Chart */}
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-            <h3 className="font-bold text-gray-700 mb-4">Meu Desempenho</h3>
-            <div className="h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={performanceData}>
-                  <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis fontSize={12} tickLine={false} axisLine={false} domain={[0, 100]} />
-                  <Tooltip cursor={{fill: '#f3f4f6'}} contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'}} />
-                  <Bar dataKey="score" fill="#4f46e5" radius={[4, 4, 0, 0]} barSize={30} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-             {currentScore < 70 && (
-              <div className="mt-4 text-xs text-red-700 bg-red-50 p-3 rounded border border-red-100 flex items-start gap-2">
-                <ShieldAlert className="w-4 h-4 flex-shrink-0" />
-                <span>A IA identificou lacunas em <b>{activeSubject}</b>. Recomendamos revisar os materiais marcados como "Básico".</span>
-              </div>
-            )}
-          </div>
-        </div>
       </div>
     </div>
   );

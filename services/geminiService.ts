@@ -129,35 +129,58 @@ export const GeminiService = {
   },
 
   /**
-   * Generates 3 distinct study models/plans for a specific topic.
+   * Generates 3 distinct study models for a specific topic (User Request).
    */
-  async generateStudyModels(topic: string, grade: SchoolGrade, subject: Subject): Promise<string> {
+  async generateStudyStrategies(topic: string, grade: SchoolGrade, subject: Subject): Promise<string> {
     try {
       const prompt = `
-        Atue como um especialista em educação. Para um aluno do ${grade} estudando ${subject}, crie 3 modelos de estudo diferentes e criativos para o tópico "${topic}".
+        Como um especialista em educação para o ${grade} na matéria ${subject}, crie 3 estratégias de estudo distintas para o tema "${topic}".
         
-        Estruture a resposta exatamente assim:
+        Saída esperada (Markdown):
         
-        🏁 **Modelo 1: [Nome da Estratégia]**
-        [Descrição curta e como fazer]
+        # 📝 1. Resumo Inteligente
+        [Um resumo conciso e claro dos pontos chave do tópico]
         
-        🧩 **Modelo 2: [Nome da Estratégia]**
-        [Descrição curta e como fazer]
+        # ❓ 2. Quiz Rápido (3 Perguntas)
+        [3 perguntas de múltipla escolha ou aberta para testar conhecimento, com as respostas escondidas ou no final]
         
-        🎨 **Modelo 3: [Nome da Estratégia]**
-        [Descrição curta e como fazer]
+        # 🎨 3. Associação Visual / Prática
+        [Descreva uma imagem mental, diagrama ou atividade prática para fixar o conteúdo]
         
-        Seja didático, direto e use uma linguagem motivadora para o aluno.
+        Seja engajador e fale diretamente com o aluno.
       `;
       
       const response = await ai.models.generateContent({
         model: MODEL_FAST,
         contents: prompt
       });
-      return response.text || "Não foi possível gerar os modelos de estudo.";
+      return response.text || "Não foi possível gerar as estratégias.";
     } catch (error) {
       console.error(error);
-      return "Erro ao conectar com o tutor IA para gerar modelos.";
+      return "Erro ao conectar com a IA.";
+    }
+  },
+
+  /**
+   * Provides a hint for an assignment without solving it (User Request).
+   */
+  async getAssignmentHint(question: string, grade: SchoolGrade, subject: Subject): Promise<string> {
+    try {
+      const prompt = `
+        O aluno do ${grade} está com dificuldade na seguinte questão de ${subject}: "${question}".
+        
+        Dê uma **DICA** ou uma explicação conceitual que ajude o aluno a chegar à resposta sozinho.
+        🚫 IMPORTANTE: NÃO dê a resposta final. NÃO resolva o problema completamente.
+        Apenas guie o raciocínio. Seja breve (max 3 frases).
+      `;
+      
+      const response = await ai.models.generateContent({
+        model: MODEL_FAST,
+        contents: prompt
+      });
+      return response.text || "Tente reler a pergunta com calma. Qual é o conceito principal?";
+    } catch (error) {
+      return "Não consegui gerar uma dica agora.";
     }
   }
 };

@@ -1,22 +1,31 @@
-import React from 'react';
-import { createRoot } from 'react-dom/client';
+import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
 import { AuthPage } from './pages/Auth';
 import { Layout } from './components/Layout';
 import { StudentHome } from './pages/student/StudentHome';
+import { StudentMaterials } from './pages/student/StudentMaterials';
+import { StudentAssignments } from './pages/student/StudentAssignments';
 import { TeacherHome } from './pages/teacher/TeacherHome';
 import { AdminPanel } from './pages/admin/AdminPanel';
 import { UserRole } from './types';
 
 const AppContent: React.FC = () => {
   const { currentUser } = useAuth();
+  const [currentRoute, setCurrentRoute] = useState(window.location.hash || '#/');
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      setCurrentRoute(window.location.hash || '#/');
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
 
   if (!currentUser) {
     return <AuthPage />;
   }
 
-  // Very simple Hash routing for demo purposes
   const getPage = () => {
     // Check pending status for teachers
     if (currentUser.role === UserRole.TEACHER && currentUser.status === 'PENDING') {
@@ -32,6 +41,8 @@ const AppContent: React.FC = () => {
 
     switch (currentUser.role) {
       case UserRole.STUDENT:
+        if (currentRoute === '#/materials') return <StudentMaterials />;
+        if (currentRoute === '#/assignments') return <StudentAssignments />;
         return <StudentHome />;
       case UserRole.TEACHER:
         return <TeacherHome />;
