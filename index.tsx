@@ -4,7 +4,7 @@ import App from './App';
 import { AlertTriangle } from 'lucide-react';
 
 interface ErrorBoundaryProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }
 
 interface ErrorBoundaryState {
@@ -17,11 +17,6 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     super(props);
     this.state = { hasError: false, error: null };
   }
-
-  public state: ErrorBoundaryState = {
-    hasError: false,
-    error: null
-  };
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
