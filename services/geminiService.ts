@@ -1,28 +1,40 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { SchoolGrade, Subject, LearningStyle } from "../types";
 
-// Helper to safely get API Key without crashing in browser if 'process' is undefined
-const getApiKey = () => {
+// Safe API Key retrieval that works in both Node.js and Browser environments
+const getApiKey = (): string => {
   try {
-    // Check if process is defined (Node/Bundler environment)
-    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
-      return process.env.API_KEY;
-    }
-    // Check for Vite specific env
-    // @ts-ignore
-    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_KEY) {
-      // @ts-ignore
-      return import.meta.env.VITE_API_KEY;
+    // In many build tools (Vite, CRA), process.env.API_KEY is replaced at build time.
+    // We check typeof process to avoid ReferenceError in pure browser environments.
+    if (typeof process !== 'undefined' && process.env) {
+      return process.env.API_KEY || '';
     }
   } catch (e) {
-    console.warn("Environment variable access failed", e);
+    // Ignore errors in environments where accessing process throws
+    console.debug("Process environment not available");
   }
   return '';
 };
 
-const apiKey = getApiKey();
-// Initialize conditionally to prevent crash on load if key is missing
-const ai = new GoogleGenAI({ apiKey: apiKey || 'dummy-key-to-prevent-crash' });
+// Initialize AI client lazily
+let aiInstance: GoogleGenAI | null = null;
+
+const getAI = () => {
+  if (!aiInstance) {
+    const key = getApiKey();
+    if (!key) {
+      console.warn("Gemini API Key is missing. AI features will not work.");
+      return null;
+    }
+    try {
+      aiInstance = new GoogleGenAI({ apiKey: key });
+    } catch (error) {
+      console.error("Failed to initialize Gemini AI:", error);
+      return null;
+    }
+  }
+  return aiInstance;
+};
 
 const MODEL_FAST = 'gemini-2.5-flash';
 
@@ -31,12 +43,13 @@ export const GeminiService = {
    * Provides personalized tutoring based on student grade and subject.
    */
   async getTutorHelp(question: string, grade: SchoolGrade, subject: Subject, context: string = ""): Promise<string> {
-    if (!apiKey) return "⚠️ Erro de Configuração: API Key não encontrada. Configure a variável de ambiente.";
-    
     try {
+      const ai = getAI();
+      if (!ai) return "O serviço de IA não está disponível no momento (Chave de API ausente).";
+
       const systemInstruction = `Você é um professor particular amigável e encorajador para um aluno do ${grade}. 
       A matéria é ${subject}. 
-      Sua resposta deve ser didática, adequada à idade da criança/adolescente, e usar emojis para tornar o aprendizado divertido.
+      Sua resposta deve ser didática, adequada à idade, e usar emojis para tornar o aprendizado divertido.
       Se o aluno tiver dificuldades, ofereça exemplos práticos.
       Responda em português do Brasil.`;
 
@@ -52,7 +65,7 @@ export const GeminiService = {
       return response.text || "Desculpe, não consegui processar sua dúvida agora.";
     } catch (error) {
       console.error("Gemini Tutor Error:", error);
-      return "Ocorreu um erro ao consultar o professor virtual. Verifique sua conexão ou tente novamente.";
+      return "Ocorreu um erro ao consultar o professor virtual. Verifique sua conexão.";
     }
   },
 
@@ -60,9 +73,10 @@ export const GeminiService = {
    * Auto-grades a simple text answer.
    */
   async autoGradeAnswer(question: string, answer: string, grade: SchoolGrade): Promise<{ grade: number; feedback: string }> {
-    if (!apiKey) return { grade: 0, feedback: "Erro: API Key ausente." };
-
     try {
+      const ai = getAI();
+      if (!ai) return { grade: 0, feedback: "IA indisponível." };
+
       const prompt = `
         Aja como um professor corrigindo uma prova de um aluno do ${grade}.
         Pergunta: "${question}"
@@ -70,7 +84,6 @@ export const GeminiService = {
         
         Avalie a resposta de 0 a 100 baseando-se na precisão e clareza.
         Forneça um feedback construtivo curto (máximo 2 frases).
-        Retorne APENAS JSON.
       `;
 
       const response = await ai.models.generateContent({
@@ -81,16 +94,19 @@ export const GeminiService = {
           responseSchema: {
             type: Type.OBJECT,
             properties: {
-              grade: { type: Type.INTEGER },
-              feedback: { type: Type.STRING }
-            }
-          }
+              grade: { type: Type.NUMBER },
+              feedback: { type: Type.STRING },
+            },
+            required: ['grade', 'feedback'],
+          },
         }
       });
 
       const text = response.text;
-      if (!text) throw new Error("No response");
-      return JSON.parse(text);
+      if (text) {
+        return JSON.parse(text);
+      }
+      return { grade: 0, feedback: "Erro ao interpretar correção." };
     } catch (error) {
       console.error("Gemini Grading Error:", error);
       return { grade: 0, feedback: "Erro na correção automática." };
@@ -101,15 +117,17 @@ export const GeminiService = {
    * Generates a lesson plan or summary for teachers.
    */
   async generateLessonContent(topic: string, grade: SchoolGrade, subject: Subject): Promise<string> {
-    if (!apiKey) return "Erro: API Key ausente.";
-
     try {
+      const ai = getAI();
+      if (!ai) return "Serviço de IA indisponível.";
+
       const response = await ai.models.generateContent({
         model: MODEL_FAST,
         contents: `Crie um resumo de aula introdutório sobre "${topic}" para alunos do ${grade} na matéria de ${subject}. Inclua 3 pontos principais e uma curiosidade. Use formatação Markdown.`,
       });
       return response.text || "";
     } catch (error) {
+      console.error(error);
       return "Erro ao gerar conteúdo.";
     }
   },
@@ -118,9 +136,10 @@ export const GeminiService = {
    * Suggests study resources based on learning style.
    */
   async getAdaptiveRecommendations(style: LearningStyle, subject: Subject, grade: SchoolGrade): Promise<string> {
-    if (!apiKey) return "Dicas indisponíveis (API Key ausente).";
-
     try {
+       const ai = getAI();
+       if (!ai) return "Dicas personalizadas indisponíveis.";
+
        const response = await ai.models.generateContent({
         model: MODEL_FAST,
         contents: `Sugira 3 atividades ou tipos de conteúdo para um aluno do ${grade} estudar ${subject}. O aluno tem estilo de aprendizado ${style}.
@@ -131,6 +150,7 @@ export const GeminiService = {
       });
       return response.text || "Sem recomendações no momento.";
     } catch (error) {
+      console.error(error);
       return "Não foi possível carregar recomendações.";
     }
   },
@@ -139,9 +159,10 @@ export const GeminiService = {
    * Identifies knowledge gaps based on recent performance mock data.
    */
   async analyzePerformanceGaps(subject: Subject, recentScores: number[]): Promise<string> {
-    if (!apiKey) return "Análise indisponível (API Key ausente).";
-
     try {
+      const ai = getAI();
+      if (!ai) return "Análise indisponível.";
+
       const average = recentScores.reduce((a,b) => a+b, 0) / recentScores.length;
       const prompt = `
         Analise o desempenho de um aluno em ${subject}. Notas recentes: [${recentScores.join(', ')}]. Média: ${average}.
@@ -153,6 +174,7 @@ export const GeminiService = {
       });
       return response.text || "";
     } catch (error) {
+      console.error(error);
       return "Análise indisponível.";
     }
   },
@@ -161,9 +183,10 @@ export const GeminiService = {
    * Generates 3 distinct study models for a specific topic (User Request).
    */
   async generateStudyStrategies(topic: string, grade: SchoolGrade, subject: Subject): Promise<string> {
-    if (!apiKey) return "Erro: API Key ausente.";
-
     try {
+      const ai = getAI();
+      if (!ai) return "Serviço de IA indisponível. Verifique a chave de API.";
+
       const prompt = `
         Como um especialista em educação para o ${grade} na matéria ${subject}, crie 3 estratégias de estudo distintas para o tema "${topic}".
         
@@ -196,9 +219,10 @@ export const GeminiService = {
    * Provides a hint for an assignment without solving it (User Request).
    */
   async getAssignmentHint(question: string, grade: SchoolGrade, subject: Subject): Promise<string> {
-    if (!apiKey) return "Dica indisponível (API Key ausente).";
-
     try {
+      const ai = getAI();
+      if (!ai) return "Dica indisponível.";
+
       const prompt = `
         O aluno do ${grade} está com dificuldade na seguinte questão de ${subject}: "${question}".
         
@@ -213,6 +237,7 @@ export const GeminiService = {
       });
       return response.text || "Tente reler a pergunta com calma. Qual é o conceito principal?";
     } catch (error) {
+      console.error(error);
       return "Não consegui gerar uma dica agora.";
     }
   }
